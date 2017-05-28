@@ -1,6 +1,14 @@
 author: Wojciech Danilo
 category: Data
-
+default-extensions: [AllowAmbiguousTypes, ApplicativeDo, Arrows, BangPatterns, BinaryLiterals,
+  ConstraintKinds, DataKinds, DefaultSignatures, DeriveDataTypeable, DeriveFoldable,
+  DeriveFunctor, DeriveGeneric, DeriveTraversable, DoAndIfThenElse, DuplicateRecordFields,
+  EmptyDataDecls, FlexibleContexts, FlexibleInstances, FunctionalDependencies, GeneralizedNewtypeDeriving,
+  InstanceSigs, LambdaCase, MonadComprehensions, MultiWayIf, NamedWildCards, NegativeLiterals,
+  NoImplicitPrelude, NumDecimals, OverloadedLabels, PackageImports, QuasiQuotes, RankNTypes,
+  RecursiveDo, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TupleSections,
+  TypeApplications, TypeFamilies, TypeFamilyDependencies, TypeOperators, ViewPatterns,
+  LiberalTypeSynonyms, RelaxedPolyRec]
 dependencies: [base, prologue, dependent-state]
 github: https://github.com/wdanilo/parsert
 library: {ghc-options: -Wall -O2, source-dirs: src}
@@ -8,53 +16,6 @@ license: Apache-2.0
 maintainer: Wojciech Danilo <wojciech.danilo@gmail.com>
 name: parsert
 stability: experimental
-synopsis: Parsert is a collection of composable monad transformers allowing for building parsers highly tailored for specific needs.
-version: 1.0.0
-
-default-extensions:
-    - AllowAmbiguousTypes
-    - ApplicativeDo
-    - Arrows
-    - BangPatterns
-    - BinaryLiterals
-    - ConstraintKinds
-    - DataKinds
-    - DefaultSignatures
-    - DeriveDataTypeable
-    - DeriveFoldable
-    - DeriveFunctor
-    - DeriveGeneric
-    - DeriveTraversable
-    - DoAndIfThenElse
-    - DuplicateRecordFields
-    - EmptyDataDecls
-    - FlexibleContexts
-    - FlexibleInstances
-    - FunctionalDependencies
-    - GeneralizedNewtypeDeriving
-    - InstanceSigs
-    - LambdaCase
-    - MonadComprehensions
-#    - MonadFailDesugaring
-    - MultiWayIf
-    - NamedWildCards
-    - NegativeLiterals
-    - NoImplicitPrelude
-    - NumDecimals
-    - OverloadedLabels
-    - PackageImports
-    - QuasiQuotes
-    - RankNTypes
-    - RecursiveDo
-    - ScopedTypeVariables
-    - StandaloneDeriving
-    - TemplateHaskell
-    - TupleSections
-    - TypeApplications
-    - TypeFamilies
-    - TypeFamilyDependencies
-    - TypeOperators
-    - ViewPatterns
-
-    - LiberalTypeSynonyms
-    - RelaxedPolyRec
+synopsis: Parsert is a collection of composable monad transformers allowing for building
+  parsers highly tailored for specific needs.
+version: 1.0.1
