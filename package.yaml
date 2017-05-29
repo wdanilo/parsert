@@ -18,4 +18,4 @@ name: parsert
 stability: experimental
 synopsis: Parsert is a collection of composable monad transformers allowing for building
   parsers highly tailored for specific needs.
-version: 1.0.1
+version: 1.0.2
