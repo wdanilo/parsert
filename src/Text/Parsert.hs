@@ -7,9 +7,11 @@ module Text.Parsert where
 
 import qualified Prelude as P
 import qualified Data.List as List
-import Prologue hiding (catch)
+import Prologue hiding (catch, drop)
+import Type.Inference
 
 import Control.Monad.State.Layered
+import Data.Foldable (asum)
 
 
 ---------------------------
@@ -118,6 +120,9 @@ class Monad m => MonadTokenParser m where
     default lookupToken :: (m ~ t m', Token m' ~ Token (t m'), MonadTokenParser m', MonadTrans t, Monad m') => m (Maybe (Token m))
     lookupToken = lift lookupToken
 
+instance {-# OVERLAPPABLE #-} (Monad (t m), MonadTrans t, Token m ~ Token (t m), MonadTokenParser m)
+      => MonadTokenParser (t m)
+
 
 -- === Utils === --
 
@@ -133,10 +138,21 @@ dropToken = void anyToken
 token :: (MonadTokenParser m, MonadProgressParser m, Alternative m, Eq (Token m), MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m) => Token m -> m (Token m)
 token = satisfy . (==)
 
+notToken :: (MonadTokenParser m, MonadProgressParser m, Alternative m, Eq (Token m), MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m) => Token m -> m (Token m)
+notToken = satisfy . (/=)
+
+tokens :: (MonadTokenParser m, MonadProgressParser m, Alternative m, Eq (Token m), MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m) => [Token m] -> m [Token m]
+tokens = try . mapM token
+
 satisfy :: (MonadTokenParser m, MonadProgressParser m, Alternative m, MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m) => (Token m -> Bool) -> m (Token m)
 satisfy f = takeToken >>= \tok -> if f tok
     then tok <$ setProgress
     else raise SatisfyError
+
+notFollowedBy :: (MonadTokenParser m, MonadProgressParser m, Alternative m, MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m, MonadCatchParser m) => m a -> m ()
+notFollowedBy m = catch m >>= \case
+    Right _ -> raise SatisfyError
+    Left  _ -> return ()
 
 data SatisfyError     = SatisfyError     deriving (Show)
 data EmptyStreamError = EmptyStreamError deriving (Show)
@@ -227,10 +243,12 @@ instance (MonadProgressParser m, IsString e) => MonadPlus   (FailParser e m)
 instance (MonadProgressParser m, IsString e) => Alternative (FailParser e m) where
     empty = throw "Unknown error"
     l <|> r = failParser $ do
-        setProgress
+        p <- getProgress
+        unsetProgress
         la <- runFailParser l
-        p  <- getProgress
-        if p || isRight la then return la else runFailParser r
+        p' <- getProgress
+        putProgress p
+        if p' || isRight la then return la else runFailParser r
 
 
 type instance Error (FailParser e m) = e
@@ -323,17 +341,22 @@ type family Result (m :: * -> *) :: * where
 
 -- === Utils === --
 
-type MonadResultParser t m = (MonadResultRegister m, MonadResultBuilder t m (Result m))
+data ResultSource
+type MonadResultParser  t m = (MonadResultRegister m, MonadResultBuilder t m (Result m), TryInfer ResultSource m t)
+type MonadResultParser' t m = (MonadResultRegister m, MonadResultBuilder t m (Result m), t ~ Infer ResultSource m)
 
 addResult :: MonadResultParser t m => t -> m ()
 addResult = buildResult >=> registerResult
 
-runResultRegister  :: forall res m a . Monad m => ResultRegister res m a -> m (a, Results res)
+addResult' :: MonadResultParser' t m => t -> m ()
+addResult' = buildResult >=> registerResult
+
+runResultRegister  :: forall res m a . Monad m => ResultRegister res m a -> m (a, [res])
 evalResultRegister :: forall res m a . Monad m => ResultRegister res m a -> m a
-execResultRegister :: forall res m a . Monad m => ResultRegister res m a -> m (Results res)
-runResultRegister  = runDefStateT
-evalResultRegister = evalDefStateT
-execResultRegister = execDefStateT
+execResultRegister :: forall res m a . Monad m => ResultRegister res m a -> m [res]
+runResultRegister  = fmap3 (reverse . unwrap) runDefStateT
+evalResultRegister = fmap2 fst runResultRegister
+execResultRegister = fmap2 snd runResultRegister
 
 
 -- === ResultRegister === --
@@ -356,6 +379,11 @@ class Monad m => MonadResultBuilder t m a where
 
 instance {-# OVERLAPPABLE #-} Monad m => MonadResultBuilder t m t where
     buildResult = return
+
+
+-- === Instances === --
+
+type instance Token (StateT (Results r) m) = Token m
 
 
 
@@ -393,6 +421,44 @@ instance (Show tok) => Show (History tok) where
 
 
 
+----------------------------------
+-- === Standard combinators === --
+----------------------------------
+
+choice :: (Foldable t, Alternative f) => t (f a) -> f a
+choice = asum
+
+option :: (Alternative m, MonadProgressParser m) => a -> m a -> m a
+option a p = try p <|> pure a
+
+option_ :: Alternative m => m a -> m ()
+option_ p = void p <|> pure ()
+
+counted :: Monad m => m [a] -> m (Int, [a])
+counted m = do
+    as <- m
+    return (length as, as)
+
+counted_ :: Monad m => m [a] -> m Int
+counted_ = fmap2 fst counted
+
+count :: Applicative m => Int -> m a -> m [a]
+count i p = if i <= 0 then pure []
+                      else (:) <$> p <*> count (pred i) p
+
+
+--------------------------
+-- === Char parsers === --
+--------------------------
+
+newline :: (Token m ~ Char, MonadTokenParser m, MonadProgressParser m, Alternative m, MonadThrowParser m, MonadErrorParser SatisfyError m, MonadErrorParser EmptyStreamError m) => m String
+newline =  escape_n <|> escape_rn where
+    escape_n  = fmap pure (token '\n')
+    escape_rn = token '\r' <**> option pure ((\b a -> [a,b]) <$> token '\n')
+
+
+
+
 -------------------------------
 -- tests
 
@@ -415,7 +481,7 @@ runTest1 = evalBacktracker
          $ evalStreamProvider "babbbaabab"
          $ evalOffsetRegister
          $ (many (token 'a' <|> token 'b') )
-        --  $ (many (token 'a' <|> token 'b') <* token 'x')
+
 
 runTest2 :: IO (Either String (Char, History Char))
 runTest2 = runFailParser
@@ -424,13 +490,27 @@ runTest2 = runFailParser
          $ evalOffsetRegister
          $ ((token 'a' <|> token 'b') *> token 'a')
 
-runTest3 :: IO (Either (OffsetError String) ())
+runTest3 :: IO (Either String Char)
 runTest3 = evalBacktracker
+         $ runFailParser
+         $ evalStreamProvider "babbbaabab"
+         $ evalOffsetRegister
+         $ (try (token 'b' *> token 'b') <|> token 'b')
+
+runTest4 :: IO (Either (OffsetError String) ())
+runTest4 = evalBacktracker
          $ runFailParser @(OffsetError String)
          $ evalStreamProvider "abbbaabab"
          $ evalOffsetRegister
          $ recover_ (const dropToken) (token 'a' *> token 'a') <|> (() <$ token 'b')
         --  $ (token 'a' *> token 'a')
+
+runTest5 :: IO (Either String Char)
+runTest5 = evalBacktracker
+         $ runFailParser
+         $ evalStreamProvider "babbbaabab"
+         $ evalOffsetRegister
+         $ ((token 'b' *> (token 'x' <|> pure 'y') *> token 'z') <|> token 'b')
 
 main :: IO ()
 main = do

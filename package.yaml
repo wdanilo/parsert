@@ -9,7 +9,7 @@ default-extensions: [AllowAmbiguousTypes, ApplicativeDo, Arrows, BangPatterns, B
   RecursiveDo, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TupleSections,
   TypeApplications, TypeFamilies, TypeFamilyDependencies, TypeOperators, ViewPatterns,
   LiberalTypeSynonyms, RelaxedPolyRec]
-dependencies: [base, prologue, dependent-state]
+dependencies: [base, prologue, dependent-state, typelevel]
 github: https://github.com/wdanilo/parsert
 library: {ghc-options: -Wall -O2, source-dirs: src}
 license: Apache-2.0
